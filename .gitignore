@@ -1,0 +1,13 @@
+# bağımlılıklar
+node_modules/
+
+# Next.js build çıktıları
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
+# ortam değişkenleri (şifreler burada, asla commit etme)
+.env
+.env*.local
+
+ders/

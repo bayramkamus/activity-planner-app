@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  categories Category[]
+  logs       ActivityLog[]
+  activities Activity[]
+}
+
+model Category {
+  id    String  @id @default(cuid())
+  name  String
+  color String?
+  icon  String?
+
+  createdAt  DateTime   @default(now())
+  userId     String
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activities Activity[]
+
+  @@unique([userId, name])
+}
+
+model Activity {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  icon          String?
+  color         String?
+  targetPerWeek Int?
+  isArchived    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  logs      ActivityLog[]
+  reminders Reminder[]
+
+  @@index([userId])
+  @@index([categoryId])
+}
+
+model ActivityLog {
+  id          String    @id @default(cuid())
+  date        DateTime  @db.Date
+  durationMin Int?
+  note        String?
+  status      LogStatus @default(DONE)
+  createdAt   DateTime  @default(now())
+
+  activityId String
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, date])
+  @@index([userId, date])
+}
+
+model Reminder {
+  id         String  @id @default(cuid())
+  time       String // "HH:mm" formatında, örn. "08:30"
+  daysOfWeek String
+  isActive   Boolean @default(true)
+
+  activityId String
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+}
+
+enum LogStatus {
+  DONE
+  SKIPPED
+  PARTIAL
+}
