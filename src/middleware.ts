@@ -7,11 +7,30 @@ const KORUNAN_SAYFALAR = ["/bugun", "/aktiviteler", "/kayitlar", "/ozet"];
 
 const GIRIS_SAYFALARI = ["/giris", "/kayit"];
 
+// Sadece middleware'in yazabileceği header'lar. İstemci bunları kendisi gönderirse silinir.
+const KIMLIK_HEADERLARI = ["x-user-id", "x-user-email"];
+
 export async function middleware(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/api")) {
     return apiKorumasi(request);
   }
   return sayfaKorumasi(request);
+}
+
+function temizHeaderlar(request: NextRequest): Headers {
+  const headers = new Headers(request.headers);
+  for (const header of KIMLIK_HEADERLARI) {
+    headers.delete(header);
+  }
+  return headers;
+}
+
+function bearerToken(request: NextRequest): string | undefined {
+  const authorization = request.headers.get("Authorization");
+  if (!authorization?.startsWith("Bearer ")) {
+    return undefined;
+  }
+  return authorization.slice("Bearer ".length).trim() || undefined;
 }
 
 async function sayfaKorumasi(request: NextRequest) {
@@ -20,28 +39,36 @@ async function sayfaKorumasi(request: NextRequest) {
   const payload = token ? await verifyToken(token) : null;
 
   const korunan = KORUNAN_SAYFALAR.some(
-    (sayfa) => pathname == sayfa || pathname.startsWith(sayfa + "/"),
+    (sayfa) => pathname === sayfa || pathname.startsWith(sayfa + "/"),
   );
   if (korunan && !payload) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("from", pathname + search);
-    return NextResponse.redirect(loginUrl);
+    const girisUrl = new URL("/giris", request.url);
+    girisUrl.searchParams.set("from", pathname + search);
+    return NextResponse.redirect(girisUrl);
   }
   if (GIRIS_SAYFALARI.includes(pathname) && payload) {
     return NextResponse.redirect(new URL("/bugun", request.url));
   }
-  return NextResponse.next();
+  return NextResponse.next({
+    request: {
+      headers: temizHeaderlar(request),
+    },
+  });
 }
 
 async function apiKorumasi(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const requestHeader = temizHeaderlar(request);
+
   if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
-    return NextResponse.next();
+    return NextResponse.next({
+      request: {
+        headers: requestHeader,
+      },
+    });
   }
 
-  const token =
-    request.cookies.get("token")?.value ??
-    request.headers.get("Authorization")?.replace("Bearer ", "");
+  const token = request.cookies.get("token")?.value ?? bearerToken(request);
   if (!token) {
     return NextResponse.json({ error: "Yetkisiz" }, { status: 401 });
   }
@@ -49,7 +76,6 @@ async function apiKorumasi(request: NextRequest) {
   if (!payload) {
     return NextResponse.json({ error: "Geçersiz token" }, { status: 401 });
   }
-  const requestHeader = new Headers(request.headers);
   requestHeader.set("X-User-Id", payload.userId);
   requestHeader.set("X-User-Email", payload.email);
   return NextResponse.next({
@@ -58,3 +84,8 @@ async function apiKorumasi(request: NextRequest) {
     },
   });
 }
+
+// Statik dosyalar (_next/static, resimler, favicon) için middleware çalışmasın.
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.[a-zA-Z0-9]+$).*)"],
+};

@@ -1,11 +1,12 @@
 import { SignJWT, jwtVerify } from "jose";
+import type { NextResponse } from "next/server";
 
 export type TokenPayload = {
   userId: string;
   email: string;
 };
 
-const TOKEN_EXPIRATION_TIME = "16h"; // Token geçerlilik süresi
+export const TOKEN_MAX_AGE_SECONDS = 60 * 60 * 16; // Token geçerlilik süresi
 
 function getSecret(): Uint8Array {
   const secret = process.env.JWT_SECRET;
@@ -18,7 +19,9 @@ function getSecret(): Uint8Array {
 export async function signToken(payload: TokenPayload): Promise<string> {
   return new SignJWT({ email: payload.email })
     .setProtectedHeader({ alg: "HS256" })
-    .setExpirationTime(TOKEN_EXPIRATION_TIME)
+    .setSubject(payload.userId)
+    .setIssuedAt()
+    .setExpirationTime(`${TOKEN_MAX_AGE_SECONDS}s`)
     .sign(getSecret());
 }
 
@@ -34,4 +37,22 @@ export async function verifyToken(token: string): Promise<TokenPayload | null> {
   } catch {
     return null;
   }
+}
+
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+  path: "/",
+} as const;
+
+export function setAuthCookie(response: NextResponse, token: string) {
+  response.cookies.set("token", token, {
+    ...COOKIE_OPTIONS,
+    maxAge: TOKEN_MAX_AGE_SECONDS,
+  });
+}
+
+export function clearAuthCookie(response: NextResponse) {
+  response.cookies.set("token", "", { ...COOKIE_OPTIONS, maxAge: 0 });
 }
