@@ -1,7 +1,12 @@
 import { verifyToken } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 
-const PUBLIC_PATHS = ["/api/auth/login", "/api/auth/register"];
+const PUBLIC_PATHS = [
+  "/api/auth/login",
+  "/api/auth/register",
+  // Süresi dolmuş token ile de çıkış yapılabilsin diye herkese açık.
+  "/api/auth/logout",
+];
 
 const KORUNAN_SAYFALAR = ["/bugun", "/aktiviteler", "/kayitlar", "/ozet"];
 
@@ -85,7 +90,11 @@ async function apiKorumasi(request: NextRequest) {
   });
 }
 
-// Statik dosyalar (_next/static, resimler, favicon) için middleware çalışmasın.
+// API'de middleware her adreste çalışmalı (sonu ".json" gibi bitenler dahil); yoksa sahte
+// X-User-Id header'ı temizlenmeden route'a ulaşır. Sayfalarda statik dosyalar hariç tutulur.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.[a-zA-Z0-9]+$).*)"],
+  matcher: [
+    "/api/:path*",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.[a-zA-Z0-9]+$).*)",
+  ],
 };
